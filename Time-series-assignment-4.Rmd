@@ -1,0 +1,101 @@
+---
+title: "Time-Series-Analysis-Assignement 4"
+author: "Conor Kelly"
+output:
+  html_document: default
+  pdf_document: default
+---
+```{r, warning=FALSE, echo=FALSE }
+
+#Packages used in this project
+library(TSA)
+library(forecast)
+library(tseries)
+library(stats)
+```
+
+## Question 1 - Stationary Time series
+Given a standard dataset of average precription medication spend per month over time from 1986 - 92 we are to determine if when working under the ARIMA framework whether the series is stationary or not. Well first quickly plot the series to gain an understanding and check for any immediate irregularities. We can see from the ACF plot that the ACF has a linear decay across lags which indicates a nonstationary series. This is confirmed by a Dickey- Fuller test for stationarity.
+```{r}
+#A
+data("prescrip")
+plot(prescrip, ylab = 'Average Monthly Prescription const $ / month', xlab = 'Year')
+tsdisplay(prescrip)
+```
+ The series may still however be differnce stationary, in which case a Dickey-Fuller test would fail to reject the null hypothesis. 
+
+```{r}
+
+adf.test(prescrip, k = 0)
+```
+with a p-value of 0.2515 we fail to reject the null hypothesis and so the series is differnce stationary. Meaning if we difference the series the resultant series is stationary which has much preferable properties for analysis. 
+
+## Question 2
+We’d now like to find the Φ3 test statistic for the test whether (α, β, φ) = (α, 0, 1) in the
+model given by: $ X_{t} = α + β_{t} + φX_{t-1} + ε_{T} $
+.
+
+```{r, warning=FALSE}
+n=length(prescrip)
+tt=2:n # convenience vector of time indices
+y=diff(prescrip) # first difference of the series
+fit = lm(y~tt+prescrip[-n]) # estimate alpha, omega x[t-1], beta
+yhat=fitted(fit)
+SSM =sum( (yhat - mean(prescrip))^2)
+SSE = sum((prescrip - yhat)^2)
+phi3 =(SSM/n-2)/(SSE/n)
+
+```
+Now that we have $ \phi_{3} $ given by the equation $ \phi_{3} = \frac{SSM / dof_{m}}{SSE / dof_{e}}  $ we can use the urca package to verify the test statistic. We can find it by using the ur.df()
+function with arguments type='trend' and lags=0 and then calling summary() on the
+result. 
+
+```{R}
+phi3
+
+```
+So $ \phi_{3} $ is not greater than the critical value so we fail to reject the null hypothesis Xt appears to be an integrated model with drift term and no trend term.
+
+## Question 3
+We will now look at the BeerSales dataset from the TSA Package. We will attempt to model monthly beer sales. 
+
+```{r}
+data("beersales")
+tsdisplay(beersales)
+plot(beersales)
+TC = ma(beersales, order = 12, centre = TRUE)
+lines(TC , col = 'red', lwd = 2)
+```
+From initial inspection of the plots output above we can see a clear trend compontent, as approximated by the red moving average line and a seasonal component. We will attempt to isolate these two components so that they can be better understood. This process involves removing the trend and seasonal components incrementally leaving you with 3 series. A trend, seasonal and white noise series that represents the "randomness" we see across the series. (A note on the moving average: in order to effectively smooth the series you must choose an order of moving average that matchees the period of the seasonality. In this case we can use our own sense to realise that these are monthly seales and the seasonality occurs over a 12 month period. In other cases the seasonality may not be as clear)
+
+# Distinction between Dickey-Fuller tests
+The first test we ran using the augmented Dickey-Fuller determines whether the series is difference stationary not whether it is trend stationary, in other words it tests if d >0 is correct for the model. Essentially testing whether the trend is auto-regressive or integrated. The F test performed here on the other hand is to test the null hypothesis of having an autoregressive component a drift term and a trend term vs the alternative of a drift term no trend term and an integrated component as opposed to an autoregressive one. 
+
+## Isolating different components of the series
+
+We'll now break the series into it's component parts that I mentioned earlier being the trend, seasonal and random component. 
+
+```{r}
+psuedo_seasonal = beersales - TC
+matrix_seasonal = matrix(psuedo_seasonal, nrow = 12)
+seasonal_component = rowMeans(matrix_seasonal, na.rm = TRUE)
+seasonal_component = seasonal_component-mean(seasonal_component)
+
+Random_component = beersales - TC - seasonal_component
+```
+
+We can no individually inspect each feature of the data set
+
+```{r}
+plot(seasonal_component, type = "l")
+```
+this shows how beer sales evolve on average over a given 12 month period relative to the average. It would be easy to see from this plot the sales of beer peaks in the summer months while being at it's lowest durung winter. 
+```{r}
+plot(TC)
+```
+Here we see the trend component which gives us a broader sense of how the sales of beer evolved over the years in question without the distraction of the seasonality. We can see an initial increase followed by a plateau from approx 1981 - 89 followed then by an increase. 
+
+```{r}
+plot(Random_component)
+```
+Finally we see the random component of the time series. This can be thought of as what the trend and seasonality don't capture. It also allows us to confirm that the previous steps were done correctly as if we had anything other than white noise, eg. a slight trend. The it would be clear our trend component had failed to capture some neccessary information. 
